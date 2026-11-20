@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cartes secrètes – prix</title>
+<style>
+:root{--bg:#f3f1ec;--fg:#16202b;--mu:#667180;--cd:#fff;--ln:#dcd8cf;--ac:#1f4fd8;--up:#157a43;--dn:#b3261e;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#0f151d;--fg:#e9edf2;--mu:#8e9aa8;--cd:#18212c;--ln:#2a3644;--ac:#7fa2ff;--up:#4cc58a;--dn:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;background:var(--bg);padding:12px 14px 8px;border-bottom:1px solid var(--ln);z-index:5}
+h1{font:700 20px/1.1 Georgia,"Times New Roman",serif;margin:0 0 2px}
+#st{color:var(--mu);font-size:12px;min-height:16px}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+button,select,input{font:inherit;color:var(--fg);background:var(--cd);border:1px solid var(--ln);border-radius:8px;padding:6px 10px}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+input[type=search]{flex:1;min-width:120px}
+input[type=number]{width:78px}
+main{padding:10px 14px 40px;display:grid;gap:8px}
+.c{display:flex;gap:10px;background:var(--cd);border:1px solid var(--ln);border-radius:10px;padding:8px}
+.c img{width:62px;height:86px;object-fit:cover;border-radius:4px;background:var(--ln)}
+.i{flex:1;min-width:0}
+.n{font-weight:600}
+.m{color:var(--mu);font-size:12px}
+.p{font:700 22px/1.2 Georgia,serif;margin-top:2px}
+.p small{font:12px system-ui;color:var(--mu);font-weight:400}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.s{background:none;border:0;font-size:22px;padding:0 4px;align-self:flex-start}
+a{color:var(--ac)}
+.note{color:var(--mu);font-size:12px;padding:6px 0}
+</style></head><body>
+<header>
+<h1>Cartes secrètes – prix</h1>
+<div id="st">Chargement…</div>
+<div class="row" id="cats"></div>
+<div class="row">
+<input type="search" id="q" placeholder="Nom ou série">
+<input type="number" id="mn" placeholder="Min €" min="0">
+<select id="so"><option value="p">Prix ↓</option><option value="a">Prix ↑</option><option value="v">Hausse vs 30 j</option><option value="d">Baisse vs 30 j</option></select>
+<button id="fv">★ Favoris</button>
+<button id="rf">Actualiser</button>
+</div>
+</header>
+<main id="ls"></main>
+<script>
+const CATS=[
+{k:'AR',l:'AR',q:'rarity:"Illustration Rare"'},
+{k:'SAR',l:'SAR',q:'rarity:"Special Illustration Rare"'},
+{k:'TG',l:'Galerie (CHR/TG)',q:'rarity:"Trainer Gallery Rare Holo"'},
+{k:'SEC',l:'Secrètes',q:'(rarity:"Rare Secret" OR rarity:"Rare Rainbow" OR rarity:"Hyper Rare")'},
+{k:'ALT',l:'Alt Art V/VMAX',q:'set.series:"Sword & Shield" (subtypes:V OR subtypes:VMAX) (rarity:"Rare Ultra" OR rarity:"Rare Holo VMAX" OR rarity:"Rare Secret")',f:x=>/^\d+$/.test(x.number)&&+x.number>x.set.printedTotal}];
+const DAY=864e5,$=id=>document.getElementById(id);
+let data=[],ts=0,act=new Set(CATS.map(c=>c.k)),fav=new Set(),onlyFav=false,shown=60;
+const ls=k=>{try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+function px(c){const m=c.cardmarket&&c.cardmarket.prices||{},t=c.tcgplayer&&c.tcgplayer.prices||{},k=Object.keys(t)[0];
+return{cm:m.trendPrice??m.averageSellPrice??null,a30:m.avg30??null,tp:k?t[k].market??null:null}}
+async function get(url){const ac=new AbortController(),to=setTimeout(()=>ac.abort(),60000);
+try{const r=await fetch(url,{signal:ac.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(to)}}
+async function refresh(){
+$('rf').disabled=true;const out=[];let err=0;
+for(const c of CATS){for(let p=1;;p++){
+$('st').textContent='Mise à jour '+c.l+' (page '+p+')…';
+try{const j=await get('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(c.q)+'&pageSize=250&page='+p+'&select=id,name,number,rarity,set,images,cardmarket,tcgplayer');
+for(const x of j.data){if(c.f&&!c.f(x))continue;const v=px(x);if(v.cm==null&&v.tp==null)continue;
+out.push({id:x.id,k:c.k,n:x.name,s:x.set.name,num:x.number,pt:x.set.printedTotal,im:x.images&&x.images.small,u:x.cardmarket&&x.cardmarket.url,cm:v.cm,a30:v.a30,tp:v.tp})}
+if(j.data.length<250)break}catch(e){err++;break}}}
+if(out.length){const mp=new Map();for(const o of out)mp.set(o.id,o);data=[...mp.values()];ts=Date.now();sv('cards2',{t:ts,d:data})}
+$('rf').disabled=false;
+if(err&&!out.length)$('st').textContent='Échec de la mise à jour (API injoignable). Données précédentes conservées.';
+render()}
+function status(){if(!ts){$('st').textContent='Aucune donnée. Appuie sur Actualiser.';return}
+$('st').textContent=data.length+' cartes · mis à jour le '+new Date(ts).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}
+function render(){
+if(ts)status();
+const q=$('q').value.trim().toLowerCase(),mn=parseFloat($('mn').value)||0,so=$('so').value;
+const dl=c=>c.cm&&c.a30?(c.cm-c.a30)/c.a30:null;
+let l=data.filter(c=>act.has(c.k)&&(c.cm||0)>=mn&&(!onlyFav||fav.has(c.id))&&(!q||(c.n+' '+c.s).toLowerCase().includes(q)));
+l.sort((a,b)=>so==='p'?(b.cm||0)-(a.cm||0):so==='a'?(a.cm||0)-(b.cm||0):so==='v'?(dl(b)??-9)-(dl(a)??-9):(dl(a)??9)-(dl(b)??9));
+const e=$('ls');e.textContent='';
+if(!l.length){e.innerHTML='<div class="note">Aucune carte pour ces filtres.</div>'}
+for(const c of l.slice(0,shown)){const d=dl(c),el=document.createElement('div');el.className='c';
+const dv=d==null?'':'<span class="'+(d>=0?'up':'dn')+'">'+(d>=0?'+':'')+(d*100).toFixed(0)+' % vs 30 j</span>';
+el.innerHTML='<img loading="lazy" alt=""><div class="i"><div class="n"></div><div class="m"></div><div class="p"></div><div class="m x"></div></div><button class="s" aria-label="Favori"></button>';
+el.querySelector('img').src=c.im||'';
+el.querySelector('.n').textContent=c.n;
+el.querySelector('.m').textContent=c.s+' – '+c.num+'/'+c.pt+' – '+CATS.find(x=>x.k===c.k).l;
+el.querySelector('.p').innerHTML=(c.cm!=null?c.cm.toFixed(2)+' €':'–')+' <small>tendance Cardmarket</small>';
+el.querySelector('.x').innerHTML=(c.tp!=null?'TCGplayer NM : '+c.tp.toFixed(2)+' $ · ':'')+dv+(c.u?' · <a href="'+c.u+(c.u.includes('?')?'&':'?')+'minCondition=2&sellerReputation=2" target="_blank" rel="noopener">Offres NM, bons vendeurs</a>':'');
+const b=el.querySelector('.s');b.textContent=fav.has(c.id)?'★':'☆';
+b.onclick=()=>{fav.has(c.id)?fav.delete(c.id):fav.add(c.id);sv('fav',[...fav]);render()};
+e.appendChild(el)}
+if(l.length>shown){const b=document.createElement('button');b.textContent='Voir plus ('+(l.length-shown)+')';b.onclick=()=>{shown+=60;render()};e.appendChild(b)}
+else e.insertAdjacentHTML('beforeend','<div class="note">Prix = tendance Cardmarket (basée sur les ventes) et prix de marché TCGplayer (near mint). Cartes non gradées uniquement. La note des vendeurs n’est pas dans les données : le lien d’offres demande Near Mint et vendeurs « Très bon » ; vérifie que les filtres sont bien actifs sur la page.</div>')}
+function init(){
+fav=new Set(ls('fav')||[]);const c=ls('cards2');if(c){data=c.d;ts=c.t}
+$('cats').innerHTML='';
+for(const c of CATS){const b=document.createElement('button');b.textContent=c.l;b.className='on';
+b.onclick=()=>{act.has(c.k)?act.delete(c.k):act.add(c.k);b.className=act.has(c.k)?'on':'';shown=60;render()};$('cats').appendChild(b)}
+$('q').oninput=$('mn').oninput=$('so').onchange=()=>{shown=60;render()};
+$('fv').onclick=e=>{onlyFav=!onlyFav;e.target.className=onlyFav?'on':'';render()};
+$('rf').onclick=refresh;
+render();
+const chk=()=>{if(!ts||Date.now()-ts>DAY)refresh()};
+chk();document.addEventListener('visibilitychange',()=>{if(!document.hidden)chk()})}
+init();
+</script></body></html>
